@@ -2,8 +2,6 @@
 
 **Lumi** is a desktop AI reading assistant that illuminates what you're reading. Open a PDF or EPUB, select any passage, and ask Lumi to explain it, translate it, or answer a question about it — all without leaving the page.
 
-![Lumi screenshot placeholder](resources/icon.png)
-
 ---
 
 ## Features
@@ -15,7 +13,6 @@
 - **Table of contents** — collapsible outline sidebar with one-click navigation
 - **Light & dark themes** — warm paper light mode and dark mode, toggled from the title bar
 - **Adjustable font size** — A− / A+ controls with a one-click reset
-- **macOS native feel** — hiddenInset title bar with traffic light buttons
 
 ---
 
@@ -110,38 +107,3 @@ npm run build:linux
 ```
 
 Output is placed in `dist/`.
-
----
-
-## Project structure
-
-```
-src/
-  main/          # Electron main process (BrowserWindow, file IPC)
-  preload/       # Context bridge (exposes electronAPI to renderer)
-  renderer/src/
-    components/  # React UI components
-    lib/         # OpenRouter streaming, PDF parsing, context builder
-    store/       # Zustand global state
-```
-
----
-
-## Tech stack
-
-| Layer | Technology |
-|-------|-----------|
-| Shell | Electron 39 |
-| Build | electron-vite + Vite 7 |
-| UI | React 19 + TypeScript |
-| Styling | Tailwind CSS v3 |
-| State | Zustand |
-| PDF | pdfjs-dist |
-| EPUB | epubjs |
-| AI | OpenRouter API (SSE streaming) |
-
----
-
-## License
-
-MIT
