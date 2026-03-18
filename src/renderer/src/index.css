@@ -1,0 +1,83 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ── Theme tokens ───────────────────────────────────────────────── */
+:root {
+  /* Light theme */
+  --bg-base:    #f7f3ee;
+  --bg-panel:   #f1ece5;
+  --bg-sidebar: #ebe5de;
+  --bg-toolbar: #e2dbd3;
+  --bg-input:   #dbd4cc;
+  --border:     #ccc5bc;
+}
+.dark {
+  /* Dark theme */
+  --bg-base:    #141414;
+  --bg-panel:   #1e1e1e;
+  --bg-sidebar: #191919;
+  --bg-toolbar: #2a2a2a;
+  --bg-input:   #252525;
+  --border:     #27272a;
+}
+
+/* Drag region for macOS custom title bar */
+.title-bar-drag {
+  -webkit-app-region: drag;
+}
+.no-drag {
+  -webkit-app-region: no-drag;
+}
+
+/* Reader text typography */
+.reader-text {
+  font-size: 17px;
+  line-height: 1.8;
+  font-family: 'Georgia', 'Times New Roman', serif;
+}
+
+/* EPUB container fills its parent */
+.epub-container {
+  width: 100%;
+  height: 100%;
+}
+.epub-container iframe {
+  border: none !important;
+}
+
+/* Smooth scrollbar for reader */
+.reader-scroll::-webkit-scrollbar {
+  width: 6px;
+}
+.reader-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+.reader-scroll::-webkit-scrollbar-thumb {
+  background: #3f3f46;
+  border-radius: 3px;
+}
+.reader-scroll::-webkit-scrollbar-thumb:hover {
+  background: #52525b;
+}
+
+/* Blinking cursor for streaming */
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+.streaming-cursor {
+  animation: blink 1s step-end infinite;
+}
+
+/* Subtle amber glow for sidebar header */
+.lumi-glow {
+  text-shadow: 0 0 20px rgba(245, 158, 11, 0.4);
+}
+
+/* Page divider in PDF reader */
+.pdf-page + .pdf-page {
+  margin-top: 2rem;
+  padding-top: 2rem;
+  border-top: 1px solid #27272a;
+}
