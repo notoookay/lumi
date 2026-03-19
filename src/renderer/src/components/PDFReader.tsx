@@ -12,10 +12,15 @@ export default function PDFReader({ buffer }: PDFReaderProps) {
   const [pages, setPages] = useState<PdfPage[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  // Veil hides content until we've scrolled to the restored position,
+  // so the user never sees a flash of page 1 before jumping.
+  const [veiled, setVeiled] = useState(true)
+
   const containerRef = useRef<HTMLDivElement>(null)
   const pageRefs = useRef<(HTMLDivElement | null)[]>([])
   const currentPageRef = useRef(1)
   const restoredRef = useRef(false)
+
   const {
     file,
     setCurrentChapter,
@@ -29,6 +34,7 @@ export default function PDFReader({ buffer }: PDFReaderProps) {
 
   useEffect(() => {
     setLoading(true)
+    setVeiled(true)
     setError(null)
     restoredRef.current = false
     parsePDF(buffer)
@@ -37,20 +43,25 @@ export default function PDFReader({ buffer }: PDFReaderProps) {
     extractPDFOutline(buffer).then(setOutline).catch(() => {})
   }, [buffer, setOutline])
 
-  // Restore saved position once pages are rendered
+  // Once pages are mounted, jump to saved position then lift the veil
   useEffect(() => {
-    if (pages.length === 0 || restoredRef.current || !file) return
-    const saved = loadPosition(file.name)
+    if (pages.length === 0 || restoredRef.current) return
+    restoredRef.current = true
+
+    const saved = file ? loadPosition(file.name) : null
+
     if (saved?.page && saved.page > 1) {
-      restoredRef.current = true
-      // Defer so the DOM has finished rendering all page divs
-      const t = setTimeout(() => {
+      // Give the DOM one more frame to finish painting all page divs
+      const t = requestAnimationFrame(() => {
         const idx = Math.max(0, Math.min(pages.length - 1, saved.page! - 1))
         pageRefs.current[idx]?.scrollIntoView()
-      }, 120)
-      return (): void => clearTimeout(t)
+        // Tiny extra delay so the browser settles before we reveal
+        setTimeout(() => setVeiled(false), 50)
+      })
+      return () => cancelAnimationFrame(t)
     }
-    restoredRef.current = true
+
+    setVeiled(false)
     return undefined
   }, [pages, file])
 
@@ -113,40 +124,54 @@ export default function PDFReader({ buffer }: PDFReaderProps) {
     showToolbar(rect.left + rect.width / 2, rect.top)
   }
 
-  if (loading) {
+  if (loading || error) {
     return (
-      <div className="flex items-center justify-center h-full text-zinc-500 text-sm" style={{ background: 'var(--bg-panel)' }}>
-        Loading PDF…
-      </div>
-    )
-  }
-
-  if (error) {
-    return (
-      <div className="flex items-center justify-center h-full text-red-500 dark:text-red-400 text-sm px-8 text-center" style={{ background: 'var(--bg-panel)' }}>
-        {error}
+      <div
+        className="flex items-center justify-center h-full text-sm"
+        style={{ background: 'var(--bg-panel)' }}
+      >
+        {error
+          ? <span className="text-red-500 dark:text-red-400 px-8 text-center">{error}</span>
+          : <span className="text-zinc-500">Loading PDF…</span>
+        }
       </div>
     )
   }
 
   return (
-    <div
-      ref={containerRef}
-      className="h-full overflow-y-auto reader-scroll px-8 py-6"
-      style={{ background: 'var(--bg-panel)' }}
-      onMouseUp={handleMouseUp}
-    >
-      {pages.map((page, i) => (
+    <div className="relative h-full" style={{ background: 'var(--bg-panel)' }}>
+      {/* Veil: blocks the flash of page-1 while we scroll to the saved position */}
+      {veiled && (
         <div
-          key={page.pageNum}
-          ref={(el) => { pageRefs.current[i] = el }}
-          data-page={page.pageNum}
-          className="pdf-page max-w-2xl mx-auto"
-        >
-          <div className="text-zinc-400 dark:text-zinc-600 text-xs mb-3 select-none">Page {page.pageNum}</div>
-          <p className="reader-text text-zinc-800 dark:text-zinc-200 whitespace-pre-wrap" style={{ fontSize }}>{page.text}</p>
-        </div>
-      ))}
+          className="absolute inset-0 z-10"
+          style={{ background: 'var(--bg-panel)' }}
+        />
+      )}
+
+      <div
+        ref={containerRef}
+        className="h-full overflow-y-auto reader-scroll px-8 py-6"
+        onMouseUp={handleMouseUp}
+      >
+        {pages.map((page, i) => (
+          <div
+            key={page.pageNum}
+            ref={(el) => { pageRefs.current[i] = el }}
+            data-page={page.pageNum}
+            className="pdf-page max-w-2xl mx-auto"
+          >
+            <div className="text-zinc-400 dark:text-zinc-600 text-xs mb-3 select-none">
+              Page {page.pageNum}
+            </div>
+            <p
+              className="reader-text text-zinc-800 dark:text-zinc-200 whitespace-pre-wrap"
+              style={{ fontSize }}
+            >
+              {page.text}
+            </p>
+          </div>
+        ))}
+      </div>
     </div>
   )
 }

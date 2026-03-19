@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import Epub, { type Rendition } from 'epubjs'
 import { useReaderStore } from '../store/useReaderStore'
 import { savePosition, loadPosition } from '../lib/readingPosition'
@@ -10,6 +10,10 @@ interface EPUBReaderProps {
 export default function EPUBReader({ buffer }: EPUBReaderProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const renditionRef = useRef<Rendition | null>(null)
+  // Veil hides the epub iframe until the rendition has settled at the
+  // correct position — prevents the flash of the first page before jumping.
+  const [veiled, setVeiled] = useState(true)
+
   const {
     file,
     setBookMeta,
@@ -25,6 +29,7 @@ export default function EPUBReader({ buffer }: EPUBReaderProps) {
 
   useEffect(() => {
     if (!containerRef.current) return
+    setVeiled(true)
 
     const book = Epub(buffer.slice(0))
 
@@ -64,11 +69,20 @@ export default function EPUBReader({ buffer }: EPUBReaderProps) {
       () => rendition.prev()
     )
 
+    let firstLocation = true
+
     rendition.on('locationChanged', (loc: { start: { href: string; cfi: string } }) => {
       const href = loc?.start?.href ?? ''
       setCurrentChapter(href)
-      // Save the CFI (precise position within a chapter) not just the href
+
       if (file) savePosition(file.name, { cfi: loc?.start?.cfi ?? href })
+
+      // Lift the veil only after the first locationChanged fires — at that
+      // point the rendition is settled at the correct (restored) position.
+      if (firstLocation) {
+        firstLocation = false
+        setVeiled(false)
+      }
     })
 
     rendition.on('selected', (_cfiRange: string, contents: { window: Window }) => {
@@ -86,7 +100,12 @@ export default function EPUBReader({ buffer }: EPUBReaderProps) {
       showToolbar(x, y)
     })
 
+    // Safety net: if locationChanged never fires (rare edge-case), lift
+    // the veil after a generous timeout so the user isn't stuck.
+    const safetyTimer = setTimeout(() => setVeiled(false), 4000)
+
     return () => {
+      clearTimeout(safetyTimer)
       renditionRef.current = null
       book.destroy()
     }
@@ -114,9 +133,19 @@ export default function EPUBReader({ buffer }: EPUBReaderProps) {
 
   return (
     <div
-      ref={containerRef}
-      className="epub-container h-full overflow-hidden"
+      className="epub-container h-full overflow-hidden relative"
       style={{ background: 'var(--bg-panel)' }}
-    />
+    >
+      {/* Veil: covers the iframe until the rendition is at the right position */}
+      {veiled && (
+        <div
+          className="absolute inset-0 z-10 flex items-center justify-center"
+          style={{ background: 'var(--bg-panel)' }}
+        >
+          <span className="text-zinc-500 text-sm">Opening…</span>
+        </div>
+      )}
+      <div ref={containerRef} className="w-full h-full" />
+    </div>
   )
 }
