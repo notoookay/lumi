@@ -47,6 +47,8 @@ interface ReaderState {
   increaseFontSize: () => void
   decreaseFontSize: () => void
   resetFontSize: () => void
+  translateTo: string
+  setTranslateTo: (lang: string) => void
   file: ReaderFile | null
   bookMeta: BookMeta
   currentChapter: string
@@ -93,6 +95,8 @@ export const useReaderStore = create<ReaderState>((set) => ({
   increaseFontSize: () => set((s) => ({ fontSize: Math.min(s.fontSize + 1, 28) })),
   decreaseFontSize: () => set((s) => ({ fontSize: Math.max(s.fontSize - 1, 12) })),
   resetFontSize: () => set({ fontSize: 17 }),
+  translateTo: 'en',
+  setTranslateTo: (lang) => set({ translateTo: lang }),
 
   goNext: null,
   goPrev: null,

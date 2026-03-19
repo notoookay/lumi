@@ -28,6 +28,18 @@ export default function AssistantSidebar() {
     })
   }
 
+  const handleSummarize = (): void => {
+    runStreamAction({
+      actionType: 'free',
+      selectedText: '',
+      surroundingContext: '',
+      chapterTitle: currentChapter,
+      bookTitle: bookMeta.title,
+      bookAuthor: bookMeta.author,
+      userQuestion: `Summarize the key points of "${currentChapter || 'this section'}" in a few bullet points.`
+    })
+  }
+
   return (
     <div
       className="flex flex-col h-full"
@@ -39,14 +51,31 @@ export default function AssistantSidebar() {
         style={{ borderBottom: '1px solid var(--border)' }}
       >
         <span className="text-amber-400 font-semibold text-sm lumi-glow">Lumi</span>
-        {chat.length > 0 && (
+
+        <div className="flex items-center gap-2">
+          {/* Summarize chapter */}
           <button
-            onClick={clearChat}
-            className="text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300 text-xs transition-colors"
+            onClick={handleSummarize}
+            className="flex items-center gap-1 text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300 text-xs transition-colors"
+            title={`Summarize "${currentChapter || 'this chapter'}"`}
           >
-            Clear
+            <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round">
+              <line x1="1" y1="3" x2="11" y2="3"/>
+              <line x1="1" y1="6" x2="8" y2="6"/>
+              <line x1="1" y1="9" x2="9.5" y2="9"/>
+            </svg>
+            Summarize
           </button>
-        )}
+
+          {chat.length > 0 && (
+            <button
+              onClick={clearChat}
+              className="text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300 text-xs transition-colors"
+            >
+              Clear
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Chat area */}

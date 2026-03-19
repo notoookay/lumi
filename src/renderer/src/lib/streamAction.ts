@@ -6,7 +6,17 @@ export async function runStreamAction(params: ContextParams): Promise<void> {
   const store = useReaderStore.getState()
   const { systemPrompt, userMessage } = buildContext(params)
 
-  const messages: Message[] = [{ role: 'user', content: userMessage }]
+  // Conversation memory: pass last 3 completed exchanges as history so the
+  // model can reference prior Q&A within the same reading session.
+  const history: Message[] = store.chat
+    .filter((m) => !m.isStreaming && !m.isError && m.response)
+    .slice(-3)
+    .flatMap((m) => [
+      { role: 'user' as const, content: m.userMessage },
+      { role: 'assistant' as const, content: m.response }
+    ])
+
+  const messages: Message[] = [...history, { role: 'user', content: userMessage }]
 
   const id = store.addChatMessage({
     actionType: params.actionType,

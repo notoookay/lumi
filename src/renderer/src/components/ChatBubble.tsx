@@ -1,3 +1,6 @@
+import { useState } from 'react'
+import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
 import type { ChatMessage } from '../store/useReaderStore'
 
 const chipStyles: Record<string, string> = {
@@ -20,6 +23,14 @@ interface ChatBubbleProps {
 
 export default function ChatBubble({ message }: ChatBubbleProps) {
   const { actionType, snippet, userMessage, response, isStreaming, isError } = message
+  const [copied, setCopied] = useState(false)
+
+  const handleCopy = (): void => {
+    navigator.clipboard.writeText(response).then(() => {
+      setCopied(true)
+      setTimeout(() => setCopied(false), 1500)
+    })
+  }
 
   return (
     <div className="flex flex-col gap-2 py-3 border-b border-zinc-200 dark:border-zinc-800/60 last:border-0">
@@ -40,20 +51,46 @@ export default function ChatBubble({ message }: ChatBubbleProps) {
         )}
       </div>
 
-      {/* Response */}
-      {(response || isStreaming) && (
-        <div
-          className={`text-sm leading-relaxed ${isError ? 'text-red-500 dark:text-red-400' : 'text-zinc-700 dark:text-zinc-300'} whitespace-pre-wrap`}
-        >
-          {response}
-          {isStreaming && <span className="streaming-cursor ml-0.5 text-amber-400">|</span>}
-        </div>
-      )}
-
+      {/* Thinking indicator */}
       {isStreaming && !response && (
         <div className="flex gap-1 items-center text-zinc-500 text-xs">
           <span className="streaming-cursor">|</span>
           <span>Thinking…</span>
+        </div>
+      )}
+
+      {/* Response — markdown rendered */}
+      {(response || isStreaming) && response && (
+        <div className="group relative">
+          {isError ? (
+            <p className="text-sm leading-relaxed text-red-500 dark:text-red-400">{response}</p>
+          ) : (
+            <div className="prose-lumi text-sm leading-relaxed text-zinc-700 dark:text-zinc-300">
+              <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                {response + (isStreaming ? '▌' : '')}
+              </ReactMarkdown>
+            </div>
+          )}
+
+          {/* Copy button — appears on hover when response is complete */}
+          {!isStreaming && !isError && response && (
+            <button
+              onClick={handleCopy}
+              className="absolute top-0 right-0 opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded text-zinc-500 hover:text-zinc-300"
+              title="Copy response"
+            >
+              {copied ? (
+                <svg width="13" height="13" viewBox="0 0 13 13" fill="currentColor" className="text-emerald-400">
+                  <path d="M11 3L5.5 8.5 2 5" stroke="currentColor" strokeWidth="1.5" fill="none" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
+              ) : (
+                <svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" strokeWidth="1.2">
+                  <rect x="4" y="4" width="8" height="8" rx="1.5"/>
+                  <path d="M2 9V2h7" strokeLinecap="round"/>
+                </svg>
+              )}
+            </button>
+          )}
         </div>
       )}
     </div>
