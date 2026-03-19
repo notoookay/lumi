@@ -20,6 +20,7 @@ export interface ChatMessage {
 
 export interface ReaderFile {
   name: string
+  path: string
   type: 'pdf' | 'epub'
   buffer: ArrayBuffer
 }

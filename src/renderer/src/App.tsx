@@ -1,18 +1,33 @@
 import { useCallback, useEffect } from 'react'
 import { useReaderStore } from './store/useReaderStore'
-import FileDropzone, { base64ToArrayBuffer } from './components/FileDropzone'
+import { base64ToArrayBuffer } from './components/FileDropzone'
 import TitleBar from './components/TitleBar'
+import BookshelfScreen from './components/BookshelfScreen'
 import ReaderPanel from './components/ReaderPanel'
 import AssistantSidebar from './components/AssistantSidebar'
 import OutlineSidebar from './components/OutlineSidebar'
 import SelectionToolbar from './components/SelectionToolbar'
+import { upsertShelfEntry } from './lib/bookshelf'
 
 export default function App() {
-  const { file, setFile, theme, outlineOpen } = useReaderStore()
+  const { file, setFile, bookMeta, theme, outlineOpen } = useReaderStore()
 
+  // Sync <html> class with theme
   useEffect(() => {
     document.documentElement.classList.toggle('dark', theme === 'dark')
   }, [theme])
+
+  // Persist book to shelf whenever file or resolved metadata changes
+  useEffect(() => {
+    if (!file || !file.path) return
+    upsertShelfEntry({
+      filePath: file.path,
+      fileName: file.name,
+      title: bookMeta.title || file.name.replace(/\.(pdf|epub)$/i, ''),
+      author: bookMeta.author,
+      type: file.type
+    })
+  }, [file, bookMeta])
 
   const openFile = useCallback(async () => {
     const result = await window.electronAPI.openFile()
@@ -20,7 +35,7 @@ export default function App() {
     const ext = result.fileName.split('.').pop()?.toLowerCase()
     if (ext !== 'pdf' && ext !== 'epub') return
     const buffer = base64ToArrayBuffer(result.buffer)
-    setFile({ name: result.fileName, type: ext as 'pdf' | 'epub', buffer })
+    setFile({ name: result.fileName, path: result.filePath, type: ext as 'pdf' | 'epub', buffer })
   }, [setFile])
 
   if (!file) {
@@ -28,7 +43,7 @@ export default function App() {
       <div className="w-full h-screen" style={{ background: 'var(--bg-base)' }}>
         <TitleBar onOpenFile={openFile} />
         <div style={{ height: 'calc(100vh - 44px)', marginTop: 44 }}>
-          <FileDropzone onOpenFile={openFile} />
+          <BookshelfScreen onOpenFile={openFile} />
         </div>
       </div>
     )

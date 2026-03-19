@@ -58,6 +58,17 @@ app.whenReady().then(() => {
     return { filePath, fileName, buffer }
   })
 
+  // IPC: open a file at a known path (for re-opening from bookshelf)
+  ipcMain.handle('open-file-by-path', async (_event, filePath: string) => {
+    try {
+      const fileName = filePath.split('/').pop() ?? filePath.split('\\').pop() ?? 'Unknown'
+      const buffer = readFileSync(filePath).toString('base64')
+      return { filePath, fileName, buffer }
+    } catch {
+      return null // file moved or deleted
+    }
+  })
+
   // IPC: get app version
   ipcMain.handle('get-app-version', () => app.getVersion())
 

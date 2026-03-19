@@ -22,10 +22,12 @@ export default function FileDropzone({ onOpenFile }: FileDropzoneProps) {
       if (!droppedFile) return
       const ext = droppedFile.name.split('.').pop()?.toLowerCase()
       if (ext !== 'pdf' && ext !== 'epub') return
+      // Electron extends the File object with a `path` property
+      const filePath = (droppedFile as File & { path?: string }).path ?? ''
       const reader = new FileReader()
       reader.onload = (ev) => {
         const buffer = ev.target?.result as ArrayBuffer
-        setFile({ name: droppedFile.name, type: ext as 'pdf' | 'epub', buffer })
+        setFile({ name: droppedFile.name, path: filePath, type: ext as 'pdf' | 'epub', buffer })
       }
       reader.readAsArrayBuffer(droppedFile)
     },
