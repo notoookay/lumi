@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react'
 import Epub, { type Rendition } from 'epubjs'
 import { useReaderStore } from '../store/useReaderStore'
+import { savePosition, loadPosition } from '../lib/readingPosition'
 
 interface EPUBReaderProps {
   buffer: ArrayBuffer
@@ -9,7 +10,18 @@ interface EPUBReaderProps {
 export default function EPUBReader({ buffer }: EPUBReaderProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const renditionRef = useRef<Rendition | null>(null)
-  const { setBookMeta, setCurrentChapter, showToolbar, setSelection, setNavigation, theme, fontSize, setOutline, setNavigateOutline } = useReaderStore()
+  const {
+    file,
+    setBookMeta,
+    setCurrentChapter,
+    showToolbar,
+    setSelection,
+    setNavigation,
+    theme,
+    fontSize,
+    setOutline,
+    setNavigateOutline
+  } = useReaderStore()
 
   useEffect(() => {
     if (!containerRef.current) return
@@ -29,7 +41,9 @@ export default function EPUBReader({ buffer }: EPUBReaderProps) {
 
     renditionRef.current = rendition
 
-    rendition.display()
+    // Restore saved position, or start from the beginning
+    const saved = file ? loadPosition(file.name) : null
+    rendition.display(saved?.cfi ?? undefined)
 
     // Extract TOC
     book.loaded.navigation.then((nav) => {
@@ -50,8 +64,11 @@ export default function EPUBReader({ buffer }: EPUBReaderProps) {
       () => rendition.prev()
     )
 
-    rendition.on('locationChanged', (loc: { start: { href: string } }) => {
-      setCurrentChapter(loc?.start?.href ?? '')
+    rendition.on('locationChanged', (loc: { start: { href: string; cfi: string } }) => {
+      const href = loc?.start?.href ?? ''
+      setCurrentChapter(href)
+      // Save the CFI (precise position within a chapter) not just the href
+      if (file) savePosition(file.name, { cfi: loc?.start?.cfi ?? href })
     })
 
     rendition.on('selected', (_cfiRange: string, contents: { window: Window }) => {
@@ -73,7 +90,7 @@ export default function EPUBReader({ buffer }: EPUBReaderProps) {
       renditionRef.current = null
       book.destroy()
     }
-  }, [buffer, setBookMeta, setCurrentChapter, showToolbar, setSelection, setNavigation, setOutline, setNavigateOutline])
+  }, [buffer, file, setBookMeta, setCurrentChapter, showToolbar, setSelection, setNavigation, setOutline, setNavigateOutline])
 
   // Apply theme to epubjs rendition
   useEffect(() => {

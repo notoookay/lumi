@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { parsePDF, extractPDFOutline, type PdfPage } from '../lib/pdfParser'
 import { useReaderStore } from '../store/useReaderStore'
 import { buildSurroundingContext } from '../lib/contextBuilder'
+import { savePosition, loadPosition } from '../lib/readingPosition'
 
 interface PDFReaderProps {
   buffer: ArrayBuffer
@@ -14,18 +15,46 @@ export default function PDFReader({ buffer }: PDFReaderProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const pageRefs = useRef<(HTMLDivElement | null)[]>([])
   const currentPageRef = useRef(1)
-  const { setCurrentChapter, showToolbar, setSelection, setNavigation, fontSize, setOutline, setNavigateOutline } = useReaderStore()
+  const restoredRef = useRef(false)
+  const {
+    file,
+    setCurrentChapter,
+    showToolbar,
+    setSelection,
+    setNavigation,
+    fontSize,
+    setOutline,
+    setNavigateOutline
+  } = useReaderStore()
 
   useEffect(() => {
     setLoading(true)
     setError(null)
+    restoredRef.current = false
     parsePDF(buffer)
       .then((p) => { setPages(p); setLoading(false) })
       .catch((err) => { setError(err?.message ?? 'Failed to parse PDF'); setLoading(false) })
     extractPDFOutline(buffer).then(setOutline).catch(() => {})
   }, [buffer, setOutline])
 
-  // IntersectionObserver: track current page
+  // Restore saved position once pages are rendered
+  useEffect(() => {
+    if (pages.length === 0 || restoredRef.current || !file) return
+    const saved = loadPosition(file.name)
+    if (saved?.page && saved.page > 1) {
+      restoredRef.current = true
+      // Defer so the DOM has finished rendering all page divs
+      const t = setTimeout(() => {
+        const idx = Math.max(0, Math.min(pages.length - 1, saved.page! - 1))
+        pageRefs.current[idx]?.scrollIntoView()
+      }, 120)
+      return (): void => clearTimeout(t)
+    }
+    restoredRef.current = true
+    return undefined
+  }, [pages, file])
+
+  // IntersectionObserver: track + persist current page
   useEffect(() => {
     if (pages.length === 0) return
     const observer = new IntersectionObserver(
@@ -35,8 +64,10 @@ export default function PDFReader({ buffer }: PDFReaderProps) {
           const el = visible[0].target as HTMLDivElement
           const num = el.dataset.page
           if (num) {
-            currentPageRef.current = Number(num)
+            const pageNum = Number(num)
+            currentPageRef.current = pageNum
             setCurrentChapter(`Page ${num}`)
+            if (file) savePosition(file.name, { page: pageNum })
           }
         }
       },
@@ -44,7 +75,7 @@ export default function PDFReader({ buffer }: PDFReaderProps) {
     )
     pageRefs.current.forEach((el) => { if (el) observer.observe(el) })
     return () => observer.disconnect()
-  }, [pages, setCurrentChapter])
+  }, [pages, file, setCurrentChapter])
 
   // Register prev/next navigation for the title bar
   useEffect(() => {

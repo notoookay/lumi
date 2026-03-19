@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useReaderStore } from '../store/useReaderStore'
 import { runStreamAction } from '../lib/streamAction'
+import { exportNotesAsMarkdown } from '../lib/exportNotes'
 import ChatBubble from './ChatBubble'
 
 export default function AssistantSidebar() {
@@ -68,12 +69,26 @@ export default function AssistantSidebar() {
           </button>
 
           {chat.length > 0 && (
-            <button
-              onClick={clearChat}
-              className="text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300 text-xs transition-colors"
-            >
-              Clear
-            </button>
+            <div className="flex items-center gap-2">
+              {/* Export chat as markdown */}
+              <button
+                onClick={() => exportNotesAsMarkdown(chat, bookMeta.title, bookMeta.author)}
+                className="flex items-center gap-1 text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300 text-xs transition-colors"
+                title="Export notes as markdown"
+              >
+                <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M6 1v7M3.5 5.5L6 8l2.5-2.5"/>
+                  <path d="M1 10h10"/>
+                </svg>
+                Export
+              </button>
+              <button
+                onClick={clearChat}
+                className="text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300 text-xs transition-colors"
+              >
+                Clear
+              </button>
+            </div>
           )}
         </div>
       </div>
