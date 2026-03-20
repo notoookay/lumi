@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import type { Annotation } from '../lib/annotationStore'
 
 export type ActionType = 'explain' | 'translate' | 'ask' | 'free'
 
@@ -33,6 +34,10 @@ export interface BookMeta {
 export interface Selection {
   text: string
   context: string
+  /** EPUB CFI for precise annotation positioning */
+  cfi?: string
+  /** PDF page number where the selection occurred */
+  pageNum?: number
 }
 
 export interface ToolbarState {
@@ -52,14 +57,17 @@ interface ReaderState {
   setTranslateTo: (lang: string) => void
   file: ReaderFile | null
   bookMeta: BookMeta
+  bookHash: string
   currentChapter: string
   selection: Selection | null
   toolbar: ToolbarState
   chat: ChatMessage[]
+  annotations: Annotation[]
 
   // Actions
   setFile: (file: ReaderFile) => void
   setBookMeta: (meta: Partial<BookMeta>) => void
+  setBookHash: (hash: string) => void
   setCurrentChapter: (chapter: string) => void
   setSelection: (selection: Selection | null) => void
   showToolbar: (x: number, y: number) => void
@@ -69,6 +77,10 @@ interface ReaderState {
   finishMessage: (id: string) => void
   setMessageError: (id: string, errorText: string) => void
   clearChat: () => void
+  // Annotations
+  setAnnotations: (annotations: Annotation[]) => void
+  addAnnotationToStore: (annotation: Annotation) => void
+  removeAnnotationFromStore: (id: string) => void
   // Navigation — registered by whichever reader is active
   goNext: (() => void) | null
   goPrev: (() => void) | null
@@ -85,10 +97,12 @@ interface ReaderState {
 export const useReaderStore = create<ReaderState>((set) => ({
   file: null,
   bookMeta: { title: '', author: '' },
+  bookHash: '',
   currentChapter: '',
   selection: null,
   toolbar: { visible: false, x: 0, y: 0 },
   chat: [],
+  annotations: [],
 
   theme: 'dark',
   toggleTheme: () => set((s) => ({ theme: s.theme === 'dark' ? 'light' : 'dark' })),
@@ -110,12 +124,18 @@ export const useReaderStore = create<ReaderState>((set) => ({
   setNavigateOutline: (fn) => set({ navigateOutline: fn }),
   toggleOutline: () => set((s) => ({ outlineOpen: !s.outlineOpen })),
 
-  setFile: (file) => set({ file, chat: [], bookMeta: { title: '', author: '' }, currentChapter: '', goNext: null, goPrev: null, outline: [], navigateOutline: null }),
+  setFile: (file) => set({ file, chat: [], bookMeta: { title: '', author: '' }, bookHash: '', currentChapter: '', goNext: null, goPrev: null, outline: [], navigateOutline: null, annotations: [] }),
   setBookMeta: (meta) => set((s) => ({ bookMeta: { ...s.bookMeta, ...meta } })),
+  setBookHash: (hash) => set({ bookHash: hash }),
   setCurrentChapter: (chapter) => set({ currentChapter: chapter }),
   setSelection: (selection) => set({ selection }),
   showToolbar: (x, y) => set({ toolbar: { visible: true, x, y } }),
   hideToolbar: () => set({ toolbar: { visible: false, x: 0, y: 0 }, selection: null }),
+
+  // Annotations
+  setAnnotations: (annotations) => set({ annotations }),
+  addAnnotationToStore: (annotation) => set((s) => ({ annotations: [...s.annotations, annotation] })),
+  removeAnnotationFromStore: (id) => set((s) => ({ annotations: s.annotations.filter((a) => a.id !== id) })),
 
   addChatMessage: (msg) => {
     const id = Math.random().toString(36).slice(2)

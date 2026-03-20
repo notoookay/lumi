@@ -4,19 +4,25 @@ import { runStreamAction } from '../lib/streamAction'
 import { runTranslateAction } from '../lib/translateAction'
 import { buildSurroundingContext } from '../lib/contextBuilder'
 import { LANGUAGES } from '../lib/googleTranslate'
+import { addAnnotation } from '../lib/annotationStore'
 
 export default function SelectionToolbar() {
-  const { toolbar, selection, hideToolbar, bookMeta, currentChapter, translateTo, setTranslateTo } =
+  const { toolbar, selection, hideToolbar, bookMeta, currentChapter, translateTo, setTranslateTo, bookHash, addAnnotationToStore } =
     useReaderStore()
   const [askMode, setAskMode] = useState(false)
+  const [highlightMode, setHighlightMode] = useState(false)
+  const [highlightNote, setHighlightNote] = useState('')
   const [question, setQuestion] = useState('')
   const [langPickerOpen, setLangPickerOpen] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
+  const noteRef = useRef<HTMLInputElement>(null)
   const toolbarRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     if (!toolbar.visible) {
       setAskMode(false)
+      setHighlightMode(false)
+      setHighlightNote('')
       setQuestion('')
       setLangPickerOpen(false)
     }
@@ -25,6 +31,10 @@ export default function SelectionToolbar() {
   useEffect(() => {
     if (askMode) inputRef.current?.focus()
   }, [askMode])
+
+  useEffect(() => {
+    if (highlightMode) noteRef.current?.focus()
+  }, [highlightMode])
 
   useEffect(() => {
     const handleKey = (e: KeyboardEvent): void => {
@@ -67,11 +77,25 @@ export default function SelectionToolbar() {
     hideToolbar()
   }
 
+  const handleHighlight = (note: string): void => {
+    if (!bookHash || !selection) return
+    addAnnotation(bookHash, {
+      text: selection.text,
+      note,
+      source: currentChapter || 'unknown',
+      cfi: selection.cfi,
+      pageNum: selection.pageNum
+    }).then((annotation) => {
+      addAnnotationToStore(annotation)
+    }).catch(() => {})
+    hideToolbar()
+  }
+
   const targetLang = LANGUAGES.find((l) => l.code === translateTo)
 
   // Toolbar positioning — stay within viewport
   const margin = 8
-  const tw = langPickerOpen ? 320 : askMode ? 300 : 288
+  const tw = langPickerOpen ? 320 : (askMode || highlightMode) ? 300 : 320
   const th = 44
   let x = toolbar.x - tw / 2
   let y = toolbar.y - th - 10
@@ -95,7 +119,7 @@ export default function SelectionToolbar() {
     >
       {/* Main row */}
       <div className="flex items-center gap-1 px-2 py-1.5">
-        {!askMode ? (
+        {!askMode && !highlightMode ? (
           <>
             {/* Explain */}
             <button
@@ -123,6 +147,24 @@ export default function SelectionToolbar() {
               </button>
             </div>
 
+            {/* Highlight */}
+            <div className="flex items-center rounded-full overflow-hidden bg-yellow-500/20">
+              <button
+                className="no-drag px-3 py-1 text-xs font-medium text-yellow-600 dark:text-yellow-400 hover:bg-yellow-500/10 transition-colors"
+                onClick={() => handleHighlight('')}
+                title="Highlight this text"
+              >
+                Highlight
+              </button>
+              <button
+                className="no-drag pr-2 pl-0.5 py-1 text-xs text-yellow-600 dark:text-yellow-400 hover:bg-yellow-500/10 transition-colors"
+                onClick={() => setHighlightMode(true)}
+                title="Highlight with a note"
+              >
+                ✏
+              </button>
+            </div>
+
             {/* Ask */}
             <button
               className="no-drag px-3 py-1 rounded-full text-xs font-medium bg-indigo-500/20 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-500/30 transition-colors"
@@ -131,7 +173,7 @@ export default function SelectionToolbar() {
               Ask
             </button>
           </>
-        ) : (
+        ) : askMode ? (
           <form
             className="flex items-center gap-1 w-full"
             onSubmit={(e) => {
@@ -156,6 +198,35 @@ export default function SelectionToolbar() {
             <button
               type="button"
               onClick={() => setAskMode(false)}
+              className="px-2 py-1 rounded-full text-xs text-zinc-500 hover:text-zinc-300 transition-colors"
+            >
+              ✕
+            </button>
+          </form>
+        ) : (
+          <form
+            className="flex items-center gap-1 w-full"
+            onSubmit={(e) => {
+              e.preventDefault()
+              handleHighlight(highlightNote.trim())
+            }}
+          >
+            <input
+              ref={noteRef}
+              value={highlightNote}
+              onChange={(e) => setHighlightNote(e.target.value)}
+              placeholder="Add a note (optional)…"
+              className="flex-1 bg-transparent text-xs text-zinc-800 dark:text-zinc-200 placeholder:text-zinc-400 dark:placeholder:text-zinc-500 outline-none px-2"
+            />
+            <button
+              type="submit"
+              className="px-3 py-1 rounded-full text-xs font-medium bg-yellow-500/20 text-yellow-600 dark:text-yellow-400 hover:bg-yellow-500/30 transition-colors"
+            >
+              Save
+            </button>
+            <button
+              type="button"
+              onClick={() => setHighlightMode(false)}
               className="px-2 py-1 rounded-full text-xs text-zinc-500 hover:text-zinc-300 transition-colors"
             >
               ✕

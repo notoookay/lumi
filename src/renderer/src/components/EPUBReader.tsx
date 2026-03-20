@@ -2,6 +2,10 @@ import { useEffect, useRef, useState } from 'react'
 import Epub, { type Rendition } from 'epubjs'
 import { useReaderStore } from '../store/useReaderStore'
 import { savePosition, loadPosition } from '../lib/readingPosition'
+import { indexEPUBBook, clearActiveIndex } from '../lib/ragPipeline'
+import { loadAnnotations } from '../lib/annotationStore'
+import { hashBuffer } from '../lib/vectorStore'
+import { extractMemoriesFromChat } from '../lib/userMemory'
 
 interface EPUBReaderProps {
   buffer: ArrayBuffer
@@ -13,6 +17,7 @@ export default function EPUBReader({ buffer }: EPUBReaderProps) {
   // Veil hides the epub iframe until the rendition has settled at the
   // correct position — prevents the flash of the first page before jumping.
   const [veiled, setVeiled] = useState(true)
+  const [ragStatus, setRagStatus] = useState<string>('')
 
   const {
     file,
@@ -24,8 +29,21 @@ export default function EPUBReader({ buffer }: EPUBReaderProps) {
     theme,
     fontSize,
     setOutline,
-    setNavigateOutline
+    setNavigateOutline,
+    annotations,
+    setAnnotations,
+    setBookHash
   } = useReaderStore()
+
+  // Memory extraction on unmount (book switch)
+  useEffect(() => {
+    return () => {
+      const state = useReaderStore.getState()
+      if (state.chat.length > 0) {
+        extractMemoriesFromChat(state.chat, state.bookMeta.title).catch(() => {})
+      }
+    }
+  }, [])
 
   useEffect(() => {
     if (!containerRef.current) return
@@ -64,6 +82,63 @@ export default function EPUBReader({ buffer }: EPUBReaderProps) {
 
     setNavigateOutline((id: string) => rendition.display(id))
 
+    // RAG: extract text from all spine items and index in background
+    clearActiveIndex()
+    book.ready.then(async () => {
+      try {
+        const chapters: { title: string; text: string }[] = []
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const spine = (book as any).spine
+        if (!spine?.items) return
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        for (const item of spine.items as any[]) {
+          try {
+            const doc = await (book as any).load(item.href)
+            const body = doc?.body ?? doc?.documentElement
+            const text = body?.textContent ?? ''
+            if (text.trim()) {
+              chapters.push({ title: item.href, text: text.trim() })
+            }
+          } catch {
+            // skip unloadable spine items
+          }
+        }
+        if (chapters.length > 0) {
+          await indexEPUBBook(buffer, chapters, (p) => {
+            setRagStatus(p.stage === 'ready' ? '' : (p.detail ?? p.stage))
+          })
+        }
+      } catch {
+        setRagStatus('')
+      }
+    })
+
+    // Load bookHash, annotations, and apply highlights
+    hashBuffer(buffer).then((hash) => {
+      setBookHash(hash)
+      loadAnnotations(hash).then((store) => {
+        if (store) {
+          setAnnotations(store.annotations)
+          // Apply EPUB highlights via rendition annotations API
+          for (const a of store.annotations) {
+            if (a.cfi) {
+              try {
+                rendition.annotations.highlight(
+                  a.cfi,
+                  { id: a.id },
+                  () => {},
+                  'lumi-highlight',
+                  { fill: 'rgba(250, 204, 21, 0.25)', 'fill-opacity': '0.25' }
+                )
+              } catch {
+                // CFI might not be renderable — skip
+              }
+            }
+          }
+        }
+      }).catch(() => {})
+    }).catch(() => {})
+
     setNavigation(
       () => rendition.next(),
       () => rendition.prev()
@@ -85,7 +160,7 @@ export default function EPUBReader({ buffer }: EPUBReaderProps) {
       }
     })
 
-    rendition.on('selected', (_cfiRange: string, contents: { window: Window }) => {
+    rendition.on('selected', (cfiRange: string, contents: { window: Window }) => {
       const sel = contents.window.getSelection()
       if (!sel || sel.isCollapsed) return
       const text = sel.toString().trim()
@@ -96,7 +171,7 @@ export default function EPUBReader({ buffer }: EPUBReaderProps) {
       const iframeRect = iframe?.getBoundingClientRect()
       const x = (iframeRect?.left ?? 0) + rect.left + rect.width / 2
       const y = (iframeRect?.top ?? 0) + rect.top
-      setSelection({ text, context: '' })
+      setSelection({ text, context: '', cfi: cfiRange })
       showToolbar(x, y)
     })
 
@@ -109,7 +184,28 @@ export default function EPUBReader({ buffer }: EPUBReaderProps) {
       renditionRef.current = null
       book.destroy()
     }
-  }, [buffer, file, setBookMeta, setCurrentChapter, showToolbar, setSelection, setNavigation, setOutline, setNavigateOutline])
+  }, [buffer, file, setBookMeta, setCurrentChapter, showToolbar, setSelection, setNavigation, setOutline, setNavigateOutline, setBookHash, setAnnotations])
+
+  // Apply EPUB highlights when annotations change
+  useEffect(() => {
+    const rendition = renditionRef.current
+    if (!rendition) return
+    for (const a of annotations) {
+      if (a.cfi) {
+        try {
+          rendition.annotations.highlight(
+            a.cfi,
+            { id: a.id },
+            () => {},
+            'lumi-highlight',
+            { fill: 'rgba(250, 204, 21, 0.25)', 'fill-opacity': '0.25' }
+          )
+        } catch {
+          // skip
+        }
+      }
+    }
+  }, [annotations])
 
   // Apply theme to epubjs rendition
   useEffect(() => {
@@ -136,6 +232,12 @@ export default function EPUBReader({ buffer }: EPUBReaderProps) {
       className="epub-container h-full overflow-hidden relative"
       style={{ background: 'var(--bg-panel)' }}
     >
+      {ragStatus && (
+        <div className="absolute top-2 right-4 z-20 text-xs text-zinc-500 dark:text-zinc-500 animate-pulse">
+          {ragStatus}
+        </div>
+      )}
+
       {/* Veil: covers the iframe until the rendition is at the right position */}
       {veiled && (
         <div

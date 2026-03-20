@@ -1,6 +1,6 @@
 import { app, shell, BrowserWindow, ipcMain, dialog } from 'electron'
 import { join } from 'path'
-import { readFileSync } from 'fs'
+import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'fs'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 
 function createWindow(): void {
@@ -71,6 +71,20 @@ app.whenReady().then(() => {
 
   // IPC: get app version
   ipcMain.handle('get-app-version', () => app.getVersion())
+
+  // IPC: RAG index persistence (app userData folder)
+  const ragDir = join(app.getPath('userData'), 'lumi-rag')
+  if (!existsSync(ragDir)) mkdirSync(ragDir, { recursive: true })
+
+  ipcMain.handle('rag-save', (_event, bookHash: string, data: string) => {
+    writeFileSync(join(ragDir, `${bookHash}.json`), data, 'utf-8')
+  })
+
+  ipcMain.handle('rag-load', (_event, bookHash: string) => {
+    const filePath = join(ragDir, `${bookHash}.json`)
+    if (!existsSync(filePath)) return null
+    return readFileSync(filePath, 'utf-8')
+  })
 
   createWindow()
 

@@ -1,11 +1,73 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, useMemo, type ReactNode } from 'react'
 import { parsePDF, extractPDFOutline, type PdfPage } from '../lib/pdfParser'
 import { useReaderStore } from '../store/useReaderStore'
 import { buildSurroundingContext } from '../lib/contextBuilder'
 import { savePosition, loadPosition } from '../lib/readingPosition'
+import { indexPDFBook, clearActiveIndex } from '../lib/ragPipeline'
+import { loadAnnotations } from '../lib/annotationStore'
+import { hashBuffer } from '../lib/vectorStore'
+import { extractMemoriesFromChat } from '../lib/userMemory'
+import type { Annotation } from '../lib/annotationStore'
 
 interface PDFReaderProps {
   buffer: ArrayBuffer
+}
+
+/**
+ * Render page text with highlight overlays for annotations.
+ * Splits the text at annotation boundaries and wraps matches in <mark>.
+ */
+function renderHighlightedText(
+  pageText: string,
+  pageNum: number,
+  annotations: Annotation[]
+): ReactNode {
+  // Find annotations that match text on this page
+  const pageAnnotations = annotations.filter(
+    (a) => a.pageNum === pageNum && pageText.includes(a.text)
+  )
+
+  if (pageAnnotations.length === 0) return pageText
+
+  // Build a list of non-overlapping highlight ranges sorted by position
+  const ranges: { start: number; end: number; annotation: Annotation }[] = []
+  for (const a of pageAnnotations) {
+    const idx = pageText.indexOf(a.text)
+    if (idx !== -1) {
+      // Check for overlap with existing ranges
+      const overlaps = ranges.some(
+        (r) => idx < r.end && idx + a.text.length > r.start
+      )
+      if (!overlaps) {
+        ranges.push({ start: idx, end: idx + a.text.length, annotation: a })
+      }
+    }
+  }
+
+  ranges.sort((a, b) => a.start - b.start)
+
+  const parts: ReactNode[] = []
+  let cursor = 0
+  for (const r of ranges) {
+    if (r.start > cursor) {
+      parts.push(pageText.slice(cursor, r.start))
+    }
+    parts.push(
+      <mark
+        key={r.annotation.id}
+        className="bg-yellow-400/30 dark:bg-yellow-500/20 rounded-sm px-0.5"
+        title={r.annotation.note || undefined}
+      >
+        {pageText.slice(r.start, r.end)}
+      </mark>
+    )
+    cursor = r.end
+  }
+  if (cursor < pageText.length) {
+    parts.push(pageText.slice(cursor))
+  }
+
+  return <>{parts}</>
 }
 
 export default function PDFReader({ buffer }: PDFReaderProps) {
@@ -21,6 +83,8 @@ export default function PDFReader({ buffer }: PDFReaderProps) {
   const currentPageRef = useRef(1)
   const restoredRef = useRef(false)
 
+  const [ragStatus, setRagStatus] = useState<string>('')
+
   const {
     file,
     setCurrentChapter,
@@ -29,8 +93,19 @@ export default function PDFReader({ buffer }: PDFReaderProps) {
     setNavigation,
     fontSize,
     setOutline,
-    setNavigateOutline
+    setNavigateOutline,
+    annotations,
+    setAnnotations,
+    setBookHash,
+    chat,
+    bookMeta
   } = useReaderStore()
+
+  // Memoize annotations filtered for current book type
+  const pdfAnnotations = useMemo(
+    () => annotations.filter((a) => a.pageNum !== undefined),
+    [annotations]
+  )
 
   useEffect(() => {
     setLoading(true)
@@ -42,6 +117,33 @@ export default function PDFReader({ buffer }: PDFReaderProps) {
       .catch((err) => { setError(err?.message ?? 'Failed to parse PDF'); setLoading(false) })
     extractPDFOutline(buffer).then(setOutline).catch(() => {})
   }, [buffer, setOutline])
+
+  // RAG: index book text in background once pages are ready
+  useEffect(() => {
+    if (pages.length === 0) return
+    clearActiveIndex()
+    indexPDFBook(buffer, pages, (p) => {
+      setRagStatus(p.stage === 'ready' ? '' : (p.detail ?? p.stage))
+    }).catch(() => setRagStatus(''))
+
+    // Set bookHash and load annotations
+    hashBuffer(buffer).then((hash) => {
+      setBookHash(hash)
+      loadAnnotations(hash).then((store) => {
+        if (store) setAnnotations(store.annotations)
+      }).catch(() => {})
+    }).catch(() => {})
+  }, [buffer, pages, setBookHash, setAnnotations])
+
+  // Memory extraction on unmount (book switch)
+  useEffect(() => {
+    return () => {
+      const state = useReaderStore.getState()
+      if (state.chat.length > 0) {
+        extractMemoriesFromChat(state.chat, state.bookMeta.title).catch(() => {})
+      }
+    }
+  }, [])
 
   // Once pages are mounted, jump to saved position then lift the veil
   useEffect(() => {
@@ -120,7 +222,7 @@ export default function PDFReader({ buffer }: PDFReaderProps) {
     const rect = range.getBoundingClientRect()
     const allText = pages.map((p) => p.text).join('\n\n')
     const context = buildSurroundingContext(allText, text)
-    setSelection({ text, context })
+    setSelection({ text, context, pageNum: currentPageRef.current })
     showToolbar(rect.left + rect.width / 2, rect.top)
   }
 
@@ -148,6 +250,12 @@ export default function PDFReader({ buffer }: PDFReaderProps) {
         />
       )}
 
+      {ragStatus && (
+        <div className="absolute top-2 right-4 z-20 text-xs text-zinc-500 dark:text-zinc-500 animate-pulse">
+          {ragStatus}
+        </div>
+      )}
+
       <div
         ref={containerRef}
         className="h-full overflow-y-auto reader-scroll px-8 py-6"
@@ -167,7 +275,7 @@ export default function PDFReader({ buffer }: PDFReaderProps) {
               className="reader-text text-zinc-800 dark:text-zinc-200 whitespace-pre-wrap"
               style={{ fontSize }}
             >
-              {page.text}
+              {renderHighlightedText(page.text, page.pageNum, pdfAnnotations)}
             </p>
           </div>
         ))}

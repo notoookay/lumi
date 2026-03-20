@@ -10,6 +10,10 @@ export interface ContextParams {
   bookType?: 'pdf' | 'epub'
   pageNumber?: number
   userQuestion?: string
+  /** RAG-retrieved passages from earlier in the book */
+  ragContext?: string
+  /** Cross-book user memory context */
+  userMemory?: string
 }
 
 export interface BuiltContext {
@@ -27,7 +31,9 @@ export function buildContext(params: ContextParams): BuiltContext {
     bookAuthor,
     bookType,
     pageNumber,
-    userQuestion
+    userQuestion,
+    ragContext,
+    userMemory
   } = params
 
   // Build location string: "Chapter 3 · page 42" or just "Chapter 3"
@@ -43,7 +49,13 @@ export function buildContext(params: ContextParams): BuiltContext {
     `\nCurrent location: ${location}\n` +
     `Instructions: Be concise and insightful. Use markdown formatting where it aids clarity ` +
     `(e.g. **bold** for key terms, bullet points for lists, > for quotes). ` +
-    `Do not add unnecessary preamble — get straight to the answer.`
+    `Do not add unnecessary preamble — get straight to the answer.` +
+    (ragContext
+      ? `\n\n**Relevant passages from earlier in the book:**\n${ragContext}`
+      : '') +
+    (userMemory
+      ? `\n\n**What you know about this reader:**\n${userMemory}`
+      : '')
 
   let userMessage: string
 
