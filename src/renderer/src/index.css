@@ -54,11 +54,11 @@
   background: transparent;
 }
 .reader-scroll::-webkit-scrollbar-thumb {
-  background: #3f3f46;
+  background: var(--border);
   border-radius: 3px;
 }
 .reader-scroll::-webkit-scrollbar-thumb:hover {
-  background: #52525b;
+  background: var(--bg-toolbar);
 }
 
 /* Blinking cursor for streaming */
@@ -79,7 +79,7 @@
 .pdf-page + .pdf-page {
   margin-top: 2rem;
   padding-top: 2rem;
-  border-top: 1px solid #27272a;
+  border-top: 1px solid var(--border);
 }
 
 /* Markdown prose styles for AI responses */

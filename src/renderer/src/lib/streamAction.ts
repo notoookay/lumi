@@ -97,10 +97,20 @@ export async function runStreamAction(params: ContextParams): Promise<void> {
   } catch (err) {
     if (controller.signal.aborted) return // intentional cancel — no error
 
-    const msg =
-      err instanceof Error && err.message
-        ? `Lumi couldn't reach the AI — ${err.message}`
-        : "Lumi couldn't reach the AI — check your API key"
+    let msg: string
+    if (err instanceof DOMException && err.name === 'TimeoutError') {
+      msg = 'Request timed out — the AI service may be slow, try again'
+    } else if (err instanceof Error && err.message.includes('401')) {
+      msg = "Lumi couldn't authenticate — check your API key in .env"
+    } else if (err instanceof Error && err.message.includes('429')) {
+      msg = 'Rate limited — too many requests, wait a moment and try again'
+    } else if (err instanceof Error && err.message.includes('5')) {
+      msg = 'The AI service is temporarily down — try again shortly'
+    } else if (err instanceof Error && err.message) {
+      msg = `Lumi couldn't reach the AI — ${err.message}`
+    } else {
+      msg = "Lumi couldn't reach the AI — check your connection and API key"
+    }
     useReaderStore.getState().setMessageError(id, msg)
   } finally {
     if (activeController === controller) activeController = null

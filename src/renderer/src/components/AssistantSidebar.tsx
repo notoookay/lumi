@@ -12,9 +12,13 @@ export default function AssistantSidebar() {
   const [tab, setTab] = useState<'chat' | 'search' | 'notes'>('chat')
   const bottomRef = useRef<HTMLDivElement>(null)
 
+  // Throttle auto-scroll — streaming updates fire every ~200ms, no need to scroll each one
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [chat.length, chat[chat.length - 1]?.response])
+    const id = requestAnimationFrame(() => {
+      bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
+    })
+    return () => cancelAnimationFrame(id)
+  }, [chat.length, chat[chat.length - 1]?.isStreaming])
 
   const handleFreeQuestion = (e: React.FormEvent): void => {
     e.preventDefault()

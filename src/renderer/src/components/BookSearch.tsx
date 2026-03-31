@@ -3,7 +3,7 @@
  * "What did it say about X?" → retrieves top-k passages.
  */
 
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { getActiveIndex } from '../lib/ragPipeline'
 import { embedQuery } from '../lib/embeddings'
 import { retrieve, type RetrievalResult } from '../lib/vectorStore'
@@ -13,6 +13,7 @@ export default function BookSearch() {
   const [results, setResults] = useState<RetrievalResult[]>([])
   const [searching, setSearching] = useState(false)
   const [noIndex, setNoIndex] = useState(false)
+  const abortRef = useRef<AbortController | null>(null)
 
   const handleSearch = async (e: React.FormEvent): Promise<void> => {
     e.preventDefault()
@@ -27,11 +28,18 @@ export default function BookSearch() {
     setNoIndex(false)
     setSearching(true)
 
+    // Cancel any in-flight search
+    abortRef.current?.abort()
+    const controller = new AbortController()
+    abortRef.current = controller
+
     try {
-      const qEmbed = await embedQuery(q)
+      const qEmbed = await embedQuery(q, controller.signal)
+      if (controller.signal.aborted) return
       const hits = retrieve(index, qEmbed, 8).filter((r) => r.score > 0.25)
       setResults(hits)
-    } catch {
+    } catch (err) {
+      if (err instanceof DOMException && err.name === 'AbortError') return
       setResults([])
     } finally {
       setSearching(false)

@@ -39,6 +39,12 @@ export async function* streamCompletion(
   const { messages, systemPrompt, actionType, signal } = opts
   const { temperature, max_tokens } = modelParams(actionType)
 
+  // 60s timeout — streaming responses can take a while, but shouldn't hang forever
+  const timeout = AbortSignal.timeout(60_000)
+  const combinedSignal = signal
+    ? AbortSignal.any([signal, timeout])
+    : timeout
+
   const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
     method: 'POST',
     headers: {
@@ -54,7 +60,7 @@ export async function* streamCompletion(
       max_tokens,
       messages: [{ role: 'system', content: systemPrompt }, ...messages]
     }),
-    signal
+    signal: combinedSignal
   })
 
   if (!res.ok) {

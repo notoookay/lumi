@@ -125,6 +125,7 @@ export default function SelectionToolbar() {
             <button
               className="no-drag px-3 py-1 rounded-full text-xs font-medium bg-amber-500/20 text-amber-600 dark:text-amber-400 hover:bg-amber-500/30 transition-colors"
               onClick={() => handleLLMAction('explain')}
+              aria-label="Explain selected text"
             >
               Explain
             </button>
@@ -135,6 +136,7 @@ export default function SelectionToolbar() {
                 className="no-drag px-3 py-1 text-xs font-medium text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/10 transition-colors"
                 onClick={() => handleTranslate()}
                 title={`Translate to ${targetLang?.name ?? 'English'}`}
+                aria-label={`Translate to ${targetLang?.name ?? 'English'}`}
               >
                 → {targetLang?.flag ?? '🇬🇧'} {targetLang?.name ?? 'English'}
               </button>
@@ -142,6 +144,8 @@ export default function SelectionToolbar() {
                 className="no-drag pr-2 pl-0.5 py-1 text-xs text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/10 transition-colors"
                 onClick={() => setLangPickerOpen((o) => !o)}
                 title="Change language"
+                aria-label="Change translation language"
+                aria-expanded={langPickerOpen}
               >
                 {langPickerOpen ? '▴' : '▾'}
               </button>
@@ -153,6 +157,7 @@ export default function SelectionToolbar() {
                 className="no-drag px-3 py-1 text-xs font-medium text-yellow-600 dark:text-yellow-400 hover:bg-yellow-500/10 transition-colors"
                 onClick={() => handleHighlight('')}
                 title="Highlight this text"
+                aria-label="Highlight selected text"
               >
                 Highlight
               </button>
@@ -160,6 +165,7 @@ export default function SelectionToolbar() {
                 className="no-drag pr-2 pl-0.5 py-1 text-xs text-yellow-600 dark:text-yellow-400 hover:bg-yellow-500/10 transition-colors"
                 onClick={() => setHighlightMode(true)}
                 title="Highlight with a note"
+                aria-label="Highlight with a note"
               >
                 ✏
               </button>
@@ -169,6 +175,7 @@ export default function SelectionToolbar() {
             <button
               className="no-drag px-3 py-1 rounded-full text-xs font-medium bg-indigo-500/20 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-500/30 transition-colors"
               onClick={() => setAskMode(true)}
+              aria-label="Ask a question about selected text"
             >
               Ask
             </button>

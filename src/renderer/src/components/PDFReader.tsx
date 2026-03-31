@@ -96,9 +96,7 @@ export default function PDFReader({ buffer }: PDFReaderProps) {
     setNavigateOutline,
     annotations,
     setAnnotations,
-    setBookHash,
-    chat,
-    bookMeta
+    setBookHash
   } = useReaderStore()
 
   // Memoize annotations filtered for current book type
@@ -108,14 +106,16 @@ export default function PDFReader({ buffer }: PDFReaderProps) {
   )
 
   useEffect(() => {
+    let cancelled = false
     setLoading(true)
     setVeiled(true)
     setError(null)
     restoredRef.current = false
     parsePDF(buffer)
-      .then((p) => { setPages(p); setLoading(false) })
-      .catch((err) => { setError(err?.message ?? 'Failed to parse PDF'); setLoading(false) })
-    extractPDFOutline(buffer).then(setOutline).catch(() => {})
+      .then((p) => { if (!cancelled) { setPages(p); setLoading(false) } })
+      .catch((err) => { if (!cancelled) { setError(err?.message ?? 'Failed to parse PDF'); setLoading(false) } })
+    extractPDFOutline(buffer).then((o) => { if (!cancelled) setOutline(o) }).catch(() => {})
+    return () => { cancelled = true }
   }, [buffer, setOutline])
 
   // RAG: index book text in background once pages are ready

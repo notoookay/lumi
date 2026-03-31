@@ -94,6 +94,11 @@ interface ReaderState {
   toggleOutline: () => void
 }
 
+// Restore persisted settings from localStorage
+const savedTheme = (localStorage.getItem('lumi-theme') as 'dark' | 'light') || 'dark'
+const savedFontSize = Number(localStorage.getItem('lumi-fontSize')) || 17
+const savedTranslateTo = localStorage.getItem('lumi-translateTo') || 'en'
+
 export const useReaderStore = create<ReaderState>((set) => ({
   file: null,
   bookMeta: { title: '', author: '' },
@@ -104,14 +109,32 @@ export const useReaderStore = create<ReaderState>((set) => ({
   chat: [],
   annotations: [],
 
-  theme: 'dark',
-  toggleTheme: () => set((s) => ({ theme: s.theme === 'dark' ? 'light' : 'dark' })),
-  fontSize: 17,
-  increaseFontSize: () => set((s) => ({ fontSize: Math.min(s.fontSize + 1, 28) })),
-  decreaseFontSize: () => set((s) => ({ fontSize: Math.max(s.fontSize - 1, 12) })),
-  resetFontSize: () => set({ fontSize: 17 }),
-  translateTo: 'en',
-  setTranslateTo: (lang) => set({ translateTo: lang }),
+  theme: savedTheme,
+  toggleTheme: () => set((s) => {
+    const next = s.theme === 'dark' ? 'light' : 'dark'
+    localStorage.setItem('lumi-theme', next)
+    return { theme: next }
+  }),
+  fontSize: savedFontSize,
+  increaseFontSize: () => set((s) => {
+    const next = Math.min(s.fontSize + 1, 28)
+    localStorage.setItem('lumi-fontSize', String(next))
+    return { fontSize: next }
+  }),
+  decreaseFontSize: () => set((s) => {
+    const next = Math.max(s.fontSize - 1, 12)
+    localStorage.setItem('lumi-fontSize', String(next))
+    return { fontSize: next }
+  }),
+  resetFontSize: () => {
+    localStorage.setItem('lumi-fontSize', '17')
+    set({ fontSize: 17 })
+  },
+  translateTo: savedTranslateTo,
+  setTranslateTo: (lang) => {
+    localStorage.setItem('lumi-translateTo', lang)
+    set({ translateTo: lang })
+  },
 
   goNext: null,
   goPrev: null,

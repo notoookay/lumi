@@ -24,7 +24,14 @@ export async function embedTexts(
   const results: Embedding[] = []
 
   for (let i = 0; i < texts.length; i += BATCH_SIZE) {
+    if (signal?.aborted) throw new DOMException('Aborted', 'AbortError')
     const batch = texts.slice(i, i + BATCH_SIZE)
+
+    // 30s timeout per batch — combine with caller's signal if provided
+    const timeout = AbortSignal.timeout(30_000)
+    const batchSignal = signal
+      ? AbortSignal.any([signal, timeout])
+      : timeout
 
     const res = await fetch('https://openrouter.ai/api/v1/embeddings', {
       method: 'POST',
@@ -38,7 +45,7 @@ export async function embedTexts(
         model: EMBEDDING_MODEL,
         input: batch
       }),
-      signal
+      signal: batchSignal
     })
 
     if (!res.ok) {

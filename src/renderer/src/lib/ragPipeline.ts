@@ -25,6 +25,8 @@ import {
 
 /** In-memory cache of the active book's index so we don't re-read disk each query. */
 let activeIndex: BookIndex | null = null
+/** Hash of the book that owns the current activeIndex — guards against race conditions. */
+let activeBookHash: string | null = null
 
 /** Returns the active index (or null if no book is indexed yet). */
 export function getActiveIndex(): BookIndex | null {
@@ -49,13 +51,17 @@ export async function indexPDFBook(
   onProgress?.({ stage: 'checking', detail: 'Checking for cached index…' })
   const bookHash = await hashBuffer(buffer)
 
+  // Claim this book as the active one — later async steps check this
+  // to bail out if the user switched books while indexing was in-flight.
+  activeBookHash = bookHash
+
   // Preload annotations for this book (non-blocking)
   loadAnnotations(bookHash).catch(() => {})
 
   // Try loading from disk cache
   const cached = await loadIndex(bookHash)
   if (cached) {
-    activeIndex = cached
+    if (activeBookHash === bookHash) activeIndex = cached
     onProgress?.({ stage: 'ready', detail: `Loaded ${cached.chunks.length} chunks from cache` })
     return cached
   }
@@ -66,7 +72,7 @@ export async function indexPDFBook(
 
   if (chunks.length === 0) {
     const empty: BookIndex = { version: 1, bookHash, chunks: [], embeddings: [] }
-    activeIndex = empty
+    if (activeBookHash === bookHash) activeIndex = empty
     onProgress?.({ stage: 'ready', detail: 'No text to index' })
     return empty
   }
@@ -83,7 +89,8 @@ export async function indexPDFBook(
   const index: BookIndex = { version: 1, bookHash, chunks, embeddings }
   await saveIndex(index)
 
-  activeIndex = index
+  // Only set as active if this book is still the current one
+  if (activeBookHash === bookHash) activeIndex = index
   onProgress?.({ stage: 'ready', detail: `Indexed ${chunks.length} chunks` })
 
   // Generate chapter summaries in background (non-blocking)
@@ -111,12 +118,14 @@ export async function indexEPUBBook(
   onProgress?.({ stage: 'checking', detail: 'Checking for cached index…' })
   const bookHash = await hashBuffer(buffer)
 
+  activeBookHash = bookHash
+
   // Preload annotations for this book (non-blocking)
   loadAnnotations(bookHash).catch(() => {})
 
   const cached = await loadIndex(bookHash)
   if (cached) {
-    activeIndex = cached
+    if (activeBookHash === bookHash) activeIndex = cached
     onProgress?.({ stage: 'ready', detail: `Loaded ${cached.chunks.length} chunks from cache` })
     return cached
   }
@@ -133,7 +142,7 @@ export async function indexEPUBBook(
 
   if (chunks.length === 0) {
     const empty: BookIndex = { version: 1, bookHash, chunks: [], embeddings: [] }
-    activeIndex = empty
+    if (activeBookHash === bookHash) activeIndex = empty
     onProgress?.({ stage: 'ready', detail: 'No text to index' })
     return empty
   }
@@ -148,7 +157,7 @@ export async function indexEPUBBook(
   const index: BookIndex = { version: 1, bookHash, chunks, embeddings }
   await saveIndex(index)
 
-  activeIndex = index
+  if (activeBookHash === bookHash) activeIndex = index
   onProgress?.({ stage: 'ready', detail: `Indexed ${chunks.length} chunks` })
 
   // Generate chapter summaries in background (non-blocking)
@@ -236,6 +245,7 @@ export async function retrieveContext(
 /** Clear the active index, annotations, and summary cache (e.g. when switching books). */
 export function clearActiveIndex(): void {
   activeIndex = null
+  activeBookHash = null
   clearSummaryCache()
   clearActiveAnnotations()
 }

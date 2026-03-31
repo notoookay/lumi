@@ -146,7 +146,7 @@ export default function EPUBReader({ buffer }: EPUBReaderProps) {
 
     let firstLocation = true
 
-    rendition.on('locationChanged', (loc: { start: { href: string; cfi: string } }) => {
+    const onLocationChanged = (loc: { start: { href: string; cfi: string } }): void => {
       const href = loc?.start?.href ?? ''
       setCurrentChapter(href)
 
@@ -158,9 +158,9 @@ export default function EPUBReader({ buffer }: EPUBReaderProps) {
         firstLocation = false
         setVeiled(false)
       }
-    })
+    }
 
-    rendition.on('selected', (cfiRange: string, contents: { window: Window }) => {
+    const onSelected = (cfiRange: string, contents: { window: Window }): void => {
       const sel = contents.window.getSelection()
       if (!sel || sel.isCollapsed) return
       const text = sel.toString().trim()
@@ -173,7 +173,10 @@ export default function EPUBReader({ buffer }: EPUBReaderProps) {
       const y = (iframeRect?.top ?? 0) + rect.top
       setSelection({ text, context: '', cfi: cfiRange })
       showToolbar(x, y)
-    })
+    }
+
+    rendition.on('locationChanged', onLocationChanged)
+    rendition.on('selected', onSelected)
 
     // Safety net: if locationChanged never fires (rare edge-case), lift
     // the veil after a generous timeout so the user isn't stuck.
@@ -181,6 +184,8 @@ export default function EPUBReader({ buffer }: EPUBReaderProps) {
 
     return () => {
       clearTimeout(safetyTimer)
+      rendition.off('locationChanged', onLocationChanged)
+      rendition.off('selected', onSelected)
       renditionRef.current = null
       book.destroy()
     }

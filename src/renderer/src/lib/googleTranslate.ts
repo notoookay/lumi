@@ -37,12 +37,22 @@ export async function translateText(
     `?client=gtx&sl=auto&tl=${encodeURIComponent(targetLang)}&dt=t` +
     `&q=${encodeURIComponent(text)}`
 
-  const res = await fetch(url)
+  const res = await fetch(url, { signal: AbortSignal.timeout(15_000) })
   if (!res.ok) throw new Error(`Google Translate returned ${res.status}`)
 
   // Response shape: [[[translated, original, ...], ...], null, detectedLang, ...]
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const data: any = await res.json()
+  let data: any
+  try {
+    data = await res.json()
+  } catch {
+    throw new Error('Google Translate returned an invalid response')
+  }
+
+  if (!Array.isArray(data?.[0])) {
+    throw new Error('Google Translate response format has changed — translation unavailable')
+  }
+
   const translatedText = (data[0] as string[][]).map((chunk) => chunk[0]).join('')
   const detectedCode: string = data[2] ?? 'auto'
   const detectedSourceName =
